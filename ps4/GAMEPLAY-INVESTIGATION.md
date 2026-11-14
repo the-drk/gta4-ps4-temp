@@ -7,7 +7,10 @@ session exhibited video delay, stutters (especially in sunlit areas), and a
 blank radar/navigation display. The session log has
 now been supplied as `Liberty.Recompiled_010.log`; the tested release is upstream
 `v0.1.0-ps4`, superseded by `v0.0.1`. The installed configuration and exact
-binary hash remain unknown. See `LOG-010-ANALYSIS.md` for the release comparison.
+binary hash were initially unknown. The later supplied console configuration
+matches the original release asset exactly; see `LOG-001-REGRESSION.md` for the
+new hosted-build regression report and artifact provenance, and
+`LOG-010-ANALYSIS.md` for the earlier release comparison.
 These changes are source-level fixes, not a verified
 performance or radar fix. The existing handoff measurements used another
 console/firmware and must not be substituted for this run's measurements.
