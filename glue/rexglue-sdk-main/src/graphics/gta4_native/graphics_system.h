@@ -2119,13 +2119,10 @@ class Gta4NativeGraphicsSystem final : public system::IGraphicsSystem {
   // counted twice (queue index and staging or worker batch), which only
   // widens the protected set. Lock order: render_mutex_, then this.
   NativeTextureProtectionIndex queued_texture_protection_;
-#if REX_PLATFORM_PS4
-  // Taken for every draw with textures (PS4 capture split: ~2 us a draw as a
-  // std::mutex, "protect").
-  mutable NativeSpinMutex queued_protection_mutex_;
-#else
+  // PS4 recovery baseline: let contending threads sleep rather than spin on
+  // Jaguar cores. Keep the original-release mutex until a matched hardware
+  // comparison demonstrates a benefit from changing this policy.
   mutable std::mutex queued_protection_mutex_;
-#endif
   uint32_t queued_title_presents_ = 0;
   bool producer_waiting_ = false;
   uint64_t diagnostic_submit_sequence_ = 0;
@@ -2398,11 +2395,13 @@ class Gta4NativeGraphicsSystem final : public system::IGraphicsSystem {
   bool texture_watch_stop_ = false;
   std::thread texture_watch_thread_;
   std::atomic<uint64_t> texture_watch_changes_{0};
-#if REX_PLATFORM_PS5 || REX_PLATFORM_PS4
+#if REX_PLATFORM_PS5
   // [ps5 port] Taken for every command the game submits (12,000-16,000 a
   // frame in the city) and almost never contended.
   NativeSpinMutex command_capture_mutex_;
 #else
+  // PS4: original-release blocking lock; do not burn a core waiting for the
+  // producer/worker during renderer stalls and starve other guest work.
   std::mutex command_capture_mutex_;
 #endif
   // State commands absorbed since the last queued command (command_capture_mutex_).

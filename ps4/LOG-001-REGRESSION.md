@@ -73,3 +73,19 @@ these gates establish all other build differences are harmless.
    differences remain candidates.
 4. Do not simultaneously alter audio priorities, affinity, queues, rendering
    settings and memory budgets. No speculative performance fix is validated.
+
+## First recovery candidate: original PS4 renderer lock policy
+
+Restore `std::mutex` for PS4 command capture and queued texture protection,
+matching the original release. PS5 retains its spin lock. Keep FFmpeg SIMD,
+memcmp, compiler/SDK, package metadata, diagnostics defaults and configuration
+unchanged to isolate this candidate. The protection contention instrumentation
+uses `try_lock` followed by blocking `lock` on contention and remains compatible.
+
+This removes a plausible source of CPU contention, not a proven culprit. The
+historical handoff reported a small improvement from spin locks on another
+console, so a regression on this console must be measured rather than assumed.
+The resulting package is a recovery test candidate, not a claim of improved FPS.
+Compare audio gaps, frame pacing, same-route FPS and stability before accepting
+it. If it does not help, do not layer speculative scheduler changes over it;
+use the original-tag/toolchain baseline to narrow the remaining differences.
