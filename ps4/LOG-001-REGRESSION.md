@@ -151,3 +151,54 @@ The original tag's `native.toml` is included as a reference, not an instruction
 to replace the console configuration. The artifact preserves the source commit,
 configuration hash, SDK/stub hashes, matching ELF, EBOOT, PKG validation log,
 and tracked source diff/status. This is not an exact original-binary rebuild.
+
+## Baseline follow-up: two captures supplied 2026-11-15
+
+The user reports both upstream's newer package and our original-tag rebuild
+still perform worse than the first downloaded package. Release names in the
+message vary (0.1.1 versus the filename's 0.0.1); the upstream executable is
+not independently identified by a runtime hash. Raw logs remain private.
+
+| Capture | Upstream filename `from_plastikman_0.0.1` | Original-tag hosted rebuild |
+| --- | --- | --- |
+| SHA-256 | `2c09caf6eb0c1fac90c90acaf33019240c11d3a9712c7f9c9d2023e4f0cb1b75` | `10f049aa801eea3a11005ade75d9c5ffd61c125d59cdae9d176510349f672b3e` |
+| Bytes / lines | 81,037 / 381 | 254,299 / 1,685 |
+| Timestamps | 13:56:56.147–14:00:39.974 | 14:21:04.156–14:29:05.232 |
+| Post-startup audio reports | 15 | 41 |
+| Total reported silence | 39,318 ms | 129,988 ms |
+| Mean silence per reported interval | 2,621.2 ms | 3,170.4 ms |
+| Worst reported silence | 3,920 ms | 4,752 ms |
+| Arithmetic mean of callback means | 7.249 ms | 7.922 ms |
+| Thresholded hitches | 63 | 173 |
+| Mean / maximum reported hitch | 266.3 / 1,867 ms | 161.7 / 1,282 ms |
+| Guest-wait-dominated / renderer-wait-dominated hitches | 16 / 42 | 122 / 31 |
+
+Exclude the upstream capture's first two audio records: they aggregate 5,582
+and 3,731 submissions over longer startup spans. Exclude only the rebuild's
+first record (9,312 submissions); its second is a normal interval. Gap reports
+are conditional, not a complete uniform series. The table does not measure
+whole-session silence percentage, average FPS, or controlled relative speed.
+
+Both captures show process affinity `0x7f`, audio core 5, and a failed affinity
+operation. Neither shows memory exhaustion: final textures 177/179 MB against
+384 MB, pressure=false, zero retries/failures, flexible free 168/166 MB, largest
+direct-memory extent 838/835 MB. Neither enables the CPU sampler. The original
+rebuild has 929 shadow heartbeat records; upstream has zero, consistent with
+the intended source rollback actually being exercised (not binary identity).
+
+The source rollback has not recovered the user's original experience. Do not
+attribute the entire regression to later renderer locks or FFmpeg assembly.
+Remaining variables include compiler/SDK/module inputs, console conditions,
+scene/configuration state, and package metadata. In particular, the earliest
+log 010 showed six-core `0x3f` affinity, whereas both new captures use seven
+cores. Our reconstructed baseline deliberately retained seven-core metadata;
+it is not a reconstruction of every original package input. This is a concrete
+remaining difference, not proof that seven-core mode causes stutter.
+
+Before another build, recover any original PKG/backup and original build
+provenance if possible; obtain the currently installed native.toml and confirm
+whether all runs used the same save/route and PS4 Pro Boost Mode state. A
+six-core-metadata-only A/B is possible using the existing baseline EBOOT,
+but should not be presented as a known fix. For CPU attribution, use a short
+sampler-enabled baseline run symbolized with this run's preserved ELF rather
+than infer DSP or scheduler costs from callback wall times alone.
