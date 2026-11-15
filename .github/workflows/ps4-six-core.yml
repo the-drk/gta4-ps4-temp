@@ -2,6 +2,9 @@ name: PS4 six-core metadata test
 
 on:
   workflow_dispatch:
+  push:
+    branches: [fix/ps4-shadow-off-hud-diagnostics]
+    paths: [.github/workflows/ps4-six-core.yml]
 
 permissions:
   contents: read
