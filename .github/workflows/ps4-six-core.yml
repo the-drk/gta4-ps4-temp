@@ -1,0 +1,154 @@
+name: PS4 six-core metadata test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  repackage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download preserved original-source baseline
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 43720395201
+          name: gta4-ps4-6-1
+          path: baseline
+      - uses: actions/checkout@v4
+        with:
+          repository: plastikman/orbis-win
+          ref: 9791d98942851163a9b94548c04a7dbb07fe8895
+          path: orbis-win
+          persist-credentials: false
+      - name: Provision same SDK and packaging runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/orbis"
+          cd "$RUNNER_TEMP/orbis"
+          base=https://github.com/orbis-ports/orbis-porting-kit/releases/download/orbis-sdk-v1
+          curl -fLsS --retry 3 -O "$base/orbis-sdk-v1.tar.gz"
+          curl -fLsS --retry 3 -O "$base/orbis-sdk-v1.tar.gz.sha256"
+          sha256sum -c orbis-sdk-v1.tar.gz.sha256
+          tar -xzf orbis-sdk-v1.tar.gz
+          sdk="$PWD/orbis-sdk-v1"
+          echo 'b86155980a3f47d48f2dec7b55559afc41dcb6039020358ec001f5a0b6ec5639  '"$sdk/BUNDLE.txt" | sha256sum -c
+          echo "PS4_SDK_BUNDLE=$sdk" >> "$GITHUB_ENV"
+          echo "OO_PS4_TOOLCHAIN=$sdk/sdk" >> "$GITHUB_ENV"
+          git clone --depth 1 --branch OpenSSL_1_1_1w https://github.com/openssl/openssl.git "$RUNNER_TEMP/openssl-src"
+          cd "$RUNNER_TEMP/openssl-src"
+          ./config shared --prefix="$RUNNER_TEMP/openssl11" --openssldir="$RUNNER_TEMP/openssl11/ssl"
+          make -j2
+          make install_sw
+          echo "PS4_PKGTOOL_OPENSSL_LIB=$RUNNER_TEMP/openssl11/lib" >> "$GITHUB_ENV"
+      - name: Install same LLVM for identical module stubs
+        run: |
+          set -euo pipefail
+          sudo install -d -m 0755 /etc/apt/keyrings
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/keyrings/apt.llvm.org.asc >/dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | sudo tee /etc/apt/sources.list.d/llvm-19.list >/dev/null
+          printf 'Package: *\nPin: release o=apt.llvm.org\nPin-Priority: 1001\n' | sudo tee /etc/apt/preferences.d/llvm-19 >/dev/null
+          sudo apt-get update
+          sudo apt-get install --yes clang-19 lld-19
+          sudo ln -sfn /usr/bin/clang-19 /usr/local/bin/clang
+          sudo ln -sfn /usr/bin/ld.lld-19 /usr/local/bin/ld.lld
+          clang --version | grep -q 'version 19\.1\.7'
+      - name: Build identical pinned module stubs
+        env:
+          PW_MODULE_STUBS_DIR: ${{ github.workspace }}/gta4-openorbis-stubs
+        run: orbis-win/scripts/build-openorbis-module-stubs.sh
+      - name: Verify baseline and clear only seven-core ATTRIBUTE bit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, shutil, struct
+          from pathlib import Path
+          root = Path('baseline')
+          def unique(name):
+              found = list(root.rglob(name))
+              if len(found) != 1:
+                  raise SystemExit(f'Expected one {name}, got {found}')
+              return found[0]
+          expected = {
+              'eboot.bin': '7881be5c4a69dba14b6df2a8523a58b43d3f597abd138278b87ddd53e27895da',
+              'GTA4.pkg': 'e3afd36e904a83bf00cf6c6a7166b38ec377e8072b77ec5368ea2d1f83750136',
+              'native.toml': '4366b468ee76fb4d7941457461a0f57c3959df1dc4eb0e259fdaa5323156a812',
+          }
+          for name, digest in expected.items():
+              if hashlib.sha256(unique(name).read_bytes()).hexdigest() != digest:
+                  raise SystemExit(f'Baseline hash mismatch: {name}')
+          build = Path('reused-build/glue/gta4-recomp')
+          build.mkdir(parents=True)
+          shutil.copy2(unique('eboot.bin'), build/'eboot.bin')
+          shutil.copy2(unique('gta4.elf'), build/'gta4')
+          shutil.copy2(unique('native.toml'), 'baseline-native.toml')
+          shutil.copy2(unique('BUILD-MANIFEST.txt'), 'BASELINE-MANIFEST.txt')
+          p = Path('ps4/package/param.sfo')
+          original = p.read_bytes()
+          data = bytearray(original)
+          magic, version, keys, values, count = struct.unpack_from('<5I', data)
+          if magic != 0x46535000:
+              raise SystemExit('Invalid SFO header')
+          matches = []
+          for i in range(count):
+              key, fmt, length, maximum, offset = struct.unpack_from('<HHIII', data, 20 + i*16)
+              start = keys + key
+              name = data[start:data.index(0, start)].decode()
+              if name == 'ATTRIBUTE':
+                  if fmt != 0x0404 or length != 4:
+                      raise SystemExit('Unexpected ATTRIBUTE type')
+                  matches.append(values + offset)
+          if len(matches) != 1:
+              raise SystemExit('Expected one ATTRIBUTE')
+          offset = matches[0]
+          before, = struct.unpack_from('<I', data, offset)
+          if not before & 0x10000:
+              raise SystemExit('Baseline template does not enable seven cores')
+          after = before & ~0x10000
+          struct.pack_into('<I', data, offset, after)
+          if sum(a != b for a,b in zip(original, data)) != 1:
+              raise SystemExit('Unexpected SFO byte changes')
+          p.write_bytes(data)
+          Path('METADATA-CHANGE.txt').write_text(
+              f'baseline_run=43720395201\nATTRIBUTE_before=0x{before:08x}\n'
+              f'ATTRIBUTE_after=0x{after:08x}\n'
+              'Only seven-core ATTRIBUTE bit cleared; baseline EBOOT reused unchanged.\n')
+          PY
+      - name: Build and validate game-free six-core package
+        env:
+          PS4_BUILD_DIR: ${{ github.workspace }}/reused-build
+          PS4_PACKAGE_DIR: ${{ github.workspace }}/six-core-package
+          PS4_STUBS_DIR: ${{ github.workspace }}/gta4-openorbis-stubs
+          PS4_EXPECTED_LIBC_SHA256: 5680c77d0215ead1c51deb00d76c5347f306e04c81b8b1119c9fd84580ebcf94
+          PS4_EXPECTED_FIOS2_SHA256: 0ab6fa2479d1c15ebdc6b7621413bfc9f89b58c97da7563bc804cef3a495ea4a
+        run: |
+          ps4/package/build-package.sh
+          sha256sum reused-build/glue/gta4-recomp/eboot.bin six-core-package/gta4.elf baseline-native.toml > six-core-package/REUSED-INPUT-SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gta4-original-baseline-six-core-${{ github.run_id }}
+          path: |
+            six-core-package/out/GTA4.pkg
+            six-core-package/gta4.elf
+            six-core-package/SHA256SUMS
+            six-core-package/REUSED-INPUT-SHA256SUMS
+            six-core-package/validate.log
+            BASELINE-MANIFEST.txt
+            METADATA-CHANGE.txt
+            baseline-native.toml
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: six-core-packaging-failure-${{ github.run_id }}
+          path: six-core-package/*.log
+          if-no-files-found: warn
