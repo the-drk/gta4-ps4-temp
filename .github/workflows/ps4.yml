@@ -11,6 +11,10 @@ on:
         description: 'Build and validate a game-free PKG using the public Orbis SDK'
         type: boolean
         default: false
+      original_release_baseline:
+        description: 'Reconstruct original v0.1.0-ps4 source with the current hosted toolchain'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -64,6 +68,36 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.original_release_baseline && 'd6f015fc09cb41e8f68faff2e27c9d64a256fd3a' || github.sha }}
+          path: build-source
+          persist-credentials: false
+      - name: Prepare isolated source and baseline build-only compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ '${{ inputs.original_release_baseline }}' == true ]]; then
+            # Keep all original runtime code and original dependency patches.
+            # Only bring the reproducible build/package harness to the old tag.
+            cp ps4/build-clean.sh build-source/ps4/
+            cp ps4/patches/ReXGlue.patch build-source/ps4/patches/
+            cp -a ps4/package build-source/ps4/
+            python3 - <<'PY'
+          from pathlib import Path
+          p = Path('build-source/glue/rexglue-sdk-main/gta4-recomp/CMakeLists.txt')
+          text = p.read_text()
+          needle = '        ${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/stb\n'
+          # The old tag needs the same pinned zlib headers as the hosted build.
+          section = text.index('elseif(PS4)')
+          head, tail = text[:section], text[section:]
+          if needle not in tail:
+              raise SystemExit('Unexpected baseline zlib include location')
+          p.write_text(head + tail.replace(needle, needle + '        ${PS4_ZLIB_INCLUDE_DIR}\n', 1))
+          PY
+          fi
+          git -C build-source rev-parse HEAD
+          git -C build-source diff --check
       - uses: actions/checkout@v4
         with:
           repository: plastikman/orbis-win
@@ -144,7 +178,7 @@ jobs:
           PS4_DXC_ROOT: ${{ runner.temp }}/gta4-dxc
         run: |
           set -euo pipefail
-          ps4/build-clean.sh 2>&1 | tee "$RUNNER_TEMP/orbis-build.log"
+          build-source/ps4/build-clean.sh 2>&1 | tee "$RUNNER_TEMP/orbis-build.log"
           if grep -E 'Killed|error:' "$RUNNER_TEMP/orbis-build.log"; then
             echo 'Build log contains errors; refusing to package' >&2
             exit 1
@@ -157,7 +191,7 @@ jobs:
           PS4_STUBS_DIR: ${{ github.workspace }}/gta4-openorbis-stubs
           PS4_EXPECTED_LIBC_SHA256: 5680c77d0215ead1c51deb00d76c5347f306e04c81b8b1119c9fd84580ebcf94
           PS4_EXPECTED_FIOS2_SHA256: 0ab6fa2479d1c15ebdc6b7621413bfc9f89b58c97da7563bc804cef3a495ea4a
-        run: ps4/package/build-package.sh
+        run: build-source/ps4/package/build-package.sh
       - name: Record build provenance
         env:
           PS4_PACKAGE_DIR: ${{ steps.paths.outputs.package }}
@@ -169,7 +203,11 @@ jobs:
             dxc_version=$("$PS4_DXC_ROOT/bin/dxc" --version 2>&1 | tail -1)
             libc_hash=$(sha256sum "$PW_MODULE_STUBS_DIR/libc.prx" | cut -d' ' -f1)
             fios2_hash=$(sha256sum "$PW_MODULE_STUBS_DIR/libSceFios2.prx" | cut -d' ' -f1)
-            echo "gta4_commit=$GITHUB_SHA"
+            echo "workflow_commit=$GITHUB_SHA"
+            echo "gta4_commit=$(git -C build-source rev-parse HEAD)"
+            echo "original_release_baseline=${{ inputs.original_release_baseline }}"
+            echo "baseline_note=reconstructed source baseline; not byte-identical to original release"
+            echo "config_sha256=$(sha256sum build-source/ps4/configs/native.toml | cut -d' ' -f1)"
             echo "orbis_win_runner_setup_commit=9791d98942851163a9b94548c04a7dbb07fe8895"
             echo "sdk_bundle_sha256=$sdk_hash"
             echo "dxc_version=$dxc_version"
@@ -178,6 +216,8 @@ jobs:
             echo "fios2_stub_sha256=$fios2_hash"
             cat "$PS4_PACKAGE_DIR/SHA256SUMS"
           } > "$PS4_PACKAGE_DIR/BUILD-MANIFEST.txt"
+          git -C build-source diff --binary > "$PS4_PACKAGE_DIR/SOURCE-DIFF.patch"
+          git -C build-source status --short > "$PS4_PACKAGE_DIR/SOURCE-STATUS.txt"
           cat "$PS4_PACKAGE_DIR/BUILD-MANIFEST.txt"
       - uses: actions/upload-artifact@v4
         with:
@@ -189,7 +229,9 @@ jobs:
             ${{ steps.paths.outputs.package }}/SHA256SUMS
             ${{ steps.paths.outputs.package }}/validate.log
             ${{ steps.paths.outputs.package }}/BUILD-MANIFEST.txt
-            ps4/configs/native.toml
+            ${{ steps.paths.outputs.package }}/SOURCE-DIFF.patch
+            ${{ steps.paths.outputs.package }}/SOURCE-STATUS.txt
+            build-source/ps4/configs/native.toml
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
