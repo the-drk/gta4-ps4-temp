@@ -148,6 +148,23 @@ jobs:
           PS4_FPKG_VERSION: gta4-ps4-six-core-${{ github.run_id }}-${{ github.run_attempt }}
           PS4_FPKG_CORE_PROFILE: six-core-test
         run: ps4/package/build-package.sh
+      - name: Record paired package provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          for profile in seven-core six-core; do
+            dir="${profile}-package"
+            {
+              echo "workflow_run_id=${GITHUB_RUN_ID}"
+              echo "workflow_run_attempt=${GITHUB_RUN_ATTEMPT}"
+              echo "workflow_commit=${GITHUB_SHA}"
+              echo "baseline_run_id=43720395201"
+              echo "core_profile=${profile}"
+              echo "eboot_sha256=$(sha256sum reused-build/glue/gta4-recomp/eboot.bin | cut -d' ' -f1)"
+              echo "param_sfo_sha256=$(sha256sum "${profile}.param.sfo" | cut -d' ' -f1)"
+              cat "${dir}/FPKG-VERSION.txt"
+            } > "${dir}/BUILD-MANIFEST.txt"
+          done
       - name: Publish both fPKGs as direct-download release assets
         env:
           GH_TOKEN: ${{ github.token }}
