@@ -166,70 +166,34 @@ jobs:
               cat "${dir}/PACKAGE-VERSION.txt"
             } > "${dir}/BUILD-MANIFEST.txt"
           done
-      - name: Publish one seven-core PKG release
+      - name: Publish both PKG builds in one release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          pkg="seven-core-package/out/gta4-ps4-seven-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.pkg"
-          [[ -s "$pkg" ]] || { echo "Seven-core PKG missing: $pkg" >&2; exit 1; }
-          tag="ps4-seven-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" "$pkg" \
-            --title "GTA IV PS4 — Seven-core test" \
+          seven="seven-core-package/out/gta4-ps4-seven-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.pkg"
+          six="six-core-package/out/gta4-ps4-six-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.pkg"
+          [[ -s "$seven" ]] || { echo "Seven-core PKG missing: $seven" >&2; exit 1; }
+          [[ -s "$six" ]] || { echo "Six-core PKG missing: $six" >&2; exit 1; }
+          tag="ps4-core-ab-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" "$seven" "$six" \
+            --title "GTA IV PS4 — Seven-core vs six-core test" \
             --target "$GITHUB_SHA" --prerelease \
-            --notes "## What this version tests
+            --notes "## Two versions to compare
 
-          This is the **standard seven-core version**. It is the control build for the comparison.
+          This release contains two installable PS4 packages:
 
-          Install this package and play the same area, route and activity that you use for the six-core test. Note the smoothness, slowdowns and any audio stutter.
+          - **Seven-core test:** the standard version.
+          - **Six-core test:** the comparison version, using the same game build with a different console workload setting.
 
-          **What to expect:** this is the reference version, not a promised performance upgrade. The paired six-core test changes one console setting while keeping the game build the same.
+          Install one version at a time. Play the same area, follow the same route and do the same activity in both. Compare smoothness, slowdowns and audio stutter.
 
-          **Version:** ${pkg##*/}
+          There is no guaranteed speed increase. The purpose is to find out whether the six-core setting makes a real, repeatable difference on your console.
 
+          **Seven-core file:** ${seven##*/}
+          **Six-core file:** ${six##*/}
           **Test run:** ${GITHUB_RUN_ID}"
-      - name: Publish one six-core PKG release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          pkg="six-core-package/out/gta4-ps4-six-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.pkg"
-          [[ -s "$pkg" ]] || { echo "Six-core PKG missing: $pkg" >&2; exit 1; }
-          tag="ps4-six-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" "$pkg" \
-            --title "GTA IV PS4 — Six-core test" \
-            --target "$GITHUB_SHA" --prerelease \
-            --notes "## What this version tests
-
-          This is the **six-core comparison version**. It uses the same game build as the seven-core version, with a different console workload setting.
-
-          Install this package and repeat the exact same area, route and activity used for the seven-core test. Compare smoothness, slowdowns and audio stutter. If you notice no consistent difference, that is a useful result too.
-
-          **What to expect:** this is an experiment, not a guaranteed speed boost.
-
-          **Version:** ${pkg##*/}
-
-          **Test run:** ${GITHUB_RUN_ID}"
-      - name: Remove earlier duplicate A/B releases
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          current_seven="ps4-seven-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          current_six="ps4-six-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          while IFS= read -r old_tag; do
-            [[ -n "$old_tag" ]] || continue
-            case "$old_tag" in
-              ps4-core-ab-*|ps4-seven-core-*|ps4-six-core-*)
-                [[ "$old_tag" == "$current_seven" || "$old_tag" == "$current_six" ]] && continue
-                echo "Removing superseded release: $old_tag"
-                gh release delete "$old_tag" --yes --cleanup-tag
-                ;;
-            esac
-          done < <(gh release list --limit 100 --json tagName --jq '.[].tagName')
       - uses: actions/upload-artifact@v4
         with:
           name: gta4-ps4-core-ab-manifests-${{ github.run_id }}-${{ github.run_attempt }}
