@@ -19,19 +19,24 @@ The default build directory is
 existing stage, so choose a new `PS4_PACKAGE_DIR` for each package run. It
 writes `out/GTA4.pkg` as a link to the validated content-ID PKG.
 
-The same validated PkgTool output is also copied to a uniquely named
-`out/<version>.fpkg` file. The extension is a distribution label; the bytes
-are identical to the validated `.pkg` output, and the package is built as a
-PS4 application package from the GP4 (it is not re-signed or transformed by the
-copy). The script writes `FPKG-VERSION.txt` and `SHA256SUMS` with the version,
-core profile, workflow run/attempt, source commit, SFO/EBOOT/package hashes,
-and UTC build time. GitHub Actions publishes the versioned fPKG as an
-individual Release asset for direct download; the small Actions artifact keeps
-its manifests and diagnostics without wrapping the 140+ MB package in a ZIP.
-For the six/seven-core A/B, both packages reuse the same baseline EBOOT and
-only differ in the SFO `ATTRIBUTE` seven-core bit. This isolates the metadata
-setting; it is not a rebuilt six-core executable and must be validated on the
-console before drawing performance conclusions.
+The validated PkgTool output is distributed with the standard `.pkg`
+extension required by the PS4. Each build also gets a unique filename such as
+`gta4-ps4-six-core-<run>-<attempt>.pkg`; no `.fpkg` files are produced.
+The script writes `PACKAGE-VERSION.txt` and `SHA256SUMS` with the version,
+test profile, workflow run/attempt, source commit, SFO/EBOOT/package hashes,
+and UTC build time.
+
+GitHub Releases provide the package as an individual download, not inside a
+large Actions ZIP. The six-core comparison workflow publishes exactly two
+separate releases: one seven-core control package and one six-core test
+package. Each release contains one `.pkg` file and a plain-language
+description of what to test. Older duplicate A/B releases are removed when a
+new pair is successfully published.
+
+Both comparison packages reuse the same baseline EBOOT and differ only in the
+PS4 setting that selects the seven-core or six-core allocation profile. This
+isolates that setting; it is not a newly compiled six-core executable and
+performance must be compared on the console before drawing conclusions.
 
 External inputs that Git does not contain:
 
