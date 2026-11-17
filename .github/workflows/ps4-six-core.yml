@@ -66,7 +66,7 @@ jobs:
         env:
           PW_MODULE_STUBS_DIR: ${{ github.workspace }}/gta4-openorbis-stubs
         run: orbis-win/scripts/build-openorbis-module-stubs.sh
-      - name: Verify baseline and clear only seven-core ATTRIBUTE bit
+      - name: Verify baseline and prepare seven-core and six-core metadata
         shell: bash
         run: |
           set -euo pipefail
@@ -93,8 +93,9 @@ jobs:
           shutil.copy2(unique('gta4.elf'), build/'gta4')
           shutil.copy2(unique('native.toml'), 'baseline-native.toml')
           shutil.copy2(unique('BUILD-MANIFEST.txt'), 'BASELINE-MANIFEST.txt')
-          p = Path('ps4/package/param.sfo')
-          original = p.read_bytes()
+
+          original = Path('ps4/package/param.sfo').read_bytes()
+          Path('seven-core.param.sfo').write_bytes(original)
           data = bytearray(original)
           magic, version, keys, values, count = struct.unpack_from('<5I', data)
           if magic != 0x46535000:
@@ -109,42 +110,68 @@ jobs:
                       raise SystemExit('Unexpected ATTRIBUTE type')
                   matches.append(values + offset)
           if len(matches) != 1:
-              raise SystemExit('Expected one ATTRIBUTE')
+              raise SystemExit('Expected exactly one ATTRIBUTE')
           offset = matches[0]
           before, = struct.unpack_from('<I', data, offset)
           if not before & 0x10000:
               raise SystemExit('Baseline template does not enable seven cores')
           after = before & ~0x10000
           struct.pack_into('<I', data, offset, after)
-          if sum(a != b for a,b in zip(original, data)) != 1:
-              raise SystemExit('Unexpected SFO byte changes')
-          p.write_bytes(data)
+          Path('six-core.param.sfo').write_bytes(data)
+          if hashlib.sha256(Path('seven-core.param.sfo').read_bytes()).hexdigest() == hashlib.sha256(Path('six-core.param.sfo').read_bytes()).hexdigest():
+              raise SystemExit('Core profiles unexpectedly have identical SFO metadata')
           Path('METADATA-CHANGE.txt').write_text(
-              f'baseline_run=43720395201\nATTRIBUTE_before=0x{before:08x}\n'
-              f'ATTRIBUTE_after=0x{after:08x}\n'
-              'Only seven-core ATTRIBUTE bit cleared; baseline EBOOT reused unchanged.\n')
+              f'ATTRIBUTE_seven_core=0x{before:08x}\n'
+              f'ATTRIBUTE_six_core=0x{after:08x}\n'
+              'Only seven-core ATTRIBUTE bit cleared for six-core package.\n'
+              'Both packages reuse the exact same baseline EBOOT.\n')
           PY
-      - name: Build and validate game-free six-core package
+      - name: Build and validate seven-core control fPKG
         env:
           PS4_BUILD_DIR: ${{ github.workspace }}/reused-build
-          PS4_PACKAGE_DIR: ${{ github.workspace }}/six-core-package
+          PS4_PACKAGE_DIR: ${{ github.workspace }}/seven-core-package
+          PS4_PARAM_SFO: ${{ github.workspace }}/seven-core.param.sfo
           PS4_STUBS_DIR: ${{ github.workspace }}/gta4-openorbis-stubs
           PS4_EXPECTED_LIBC_SHA256: 5680c77d0215ead1c51deb00d76c5347f306e04c81b8b1119c9fd84580ebcf94
           PS4_EXPECTED_FIOS2_SHA256: 0ab6fa2479d1c15ebdc6b7621413bfc9f89b58c97da7563bc804cef3a495ea4a
+          PS4_FPKG_VERSION: gta4-ps4-seven-core-${{ github.run_id }}-${{ github.run_attempt }}
+          PS4_FPKG_CORE_PROFILE: seven-core-control
+        run: ps4/package/build-package.sh
+      - name: Build and validate six-core test fPKG
+        env:
+          PS4_BUILD_DIR: ${{ github.workspace }}/reused-build
+          PS4_PACKAGE_DIR: ${{ github.workspace }}/six-core-package
+          PS4_PARAM_SFO: ${{ github.workspace }}/six-core.param.sfo
+          PS4_STUBS_DIR: ${{ github.workspace }}/gta4-openorbis-stubs
+          PS4_EXPECTED_LIBC_SHA256: 5680c77d0215ead1c51deb00d76c5347f306e04c81b8b1119c9fd84580ebcf94
+          PS4_EXPECTED_FIOS2_SHA256: 0ab6fa2479d1c15ebdc6b7621413bfc9f89b58c97da7563bc804cef3a495ea4a
+          PS4_FPKG_VERSION: gta4-ps4-six-core-${{ github.run_id }}-${{ github.run_attempt }}
+          PS4_FPKG_CORE_PROFILE: six-core-test
+        run: ps4/package/build-package.sh
+      - name: Publish both fPKGs as direct-download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          ps4/package/build-package.sh
-          sha256sum reused-build/glue/gta4-recomp/eboot.bin six-core-package/gta4.elf baseline-native.toml > six-core-package/REUSED-INPUT-SHA256SUMS
+          set -euo pipefail
+          tag="ps4-core-ab-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" \
+            "seven-core-package/out/gta4-ps4-seven-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.fpkg" \
+            "six-core-package/out/gta4-ps4-six-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.fpkg" \
+            --title "GTA IV PS4 core A/B ${GITHUB_RUN_ID}" \
+            --notes "Controlled core-allocation A/B. Both fPKGs use the exact same baseline EBOOT; only the PS4 SFO ATTRIBUTE seven-core bit differs. Run ${GITHUB_RUN_ID}, attempt ${GITHUB_RUN_ATTEMPT}, source ${GITHUB_SHA}."
       - uses: actions/upload-artifact@v4
         with:
-          name: gta4-original-baseline-six-core-${{ github.run_id }}
+          name: gta4-ps4-core-ab-manifests-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            six-core-package/out/GTA4.pkg
-            six-core-package/gta4.elf
+            seven-core-package/FPKG-VERSION.txt
+            seven-core-package/SHA256SUMS
+            seven-core-package/BUILD-MANIFEST.txt
+            six-core-package/FPKG-VERSION.txt
             six-core-package/SHA256SUMS
-            six-core-package/REUSED-INPUT-SHA256SUMS
-            six-core-package/validate.log
-            BASELINE-MANIFEST.txt
+            six-core-package/BUILD-MANIFEST.txt
             METADATA-CHANGE.txt
+            BASELINE-MANIFEST.txt
             baseline-native.toml
           if-no-files-found: error
           retention-days: 30
