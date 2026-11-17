@@ -202,6 +202,8 @@ jobs:
           PS4_STUBS_DIR: ${{ github.workspace }}/gta4-openorbis-stubs
           PS4_EXPECTED_LIBC_SHA256: 5680c77d0215ead1c51deb00d76c5347f306e04c81b8b1119c9fd84580ebcf94
           PS4_EXPECTED_FIOS2_SHA256: 0ab6fa2479d1c15ebdc6b7621413bfc9f89b58c97da7563bc804cef3a495ea4a
+          PS4_FPKG_VERSION: gta4-ps4-${{ github.run_number }}-${{ github.run_attempt }}-${{ github.sha }}
+          PS4_FPKG_CORE_PROFILE: seven-core-default
         run: build-source/ps4/package/build-package.sh
       - name: Record build provenance
         env:
@@ -235,11 +237,13 @@ jobs:
           name: gta4-ps4-${{ github.run_number }}-${{ github.run_attempt }}
           path: |
             ${{ steps.paths.outputs.package }}/out/GTA4.pkg
+            ${{ steps.paths.outputs.package }}/out/*.fpkg
             ${{ steps.paths.outputs.build }}/glue/gta4-recomp/eboot.bin
             ${{ steps.paths.outputs.package }}/gta4.elf
             ${{ steps.paths.outputs.package }}/SHA256SUMS
             ${{ steps.paths.outputs.package }}/validate.log
             ${{ steps.paths.outputs.package }}/BUILD-MANIFEST.txt
+            ${{ steps.paths.outputs.package }}/FPKG-VERSION.txt
             ${{ steps.paths.outputs.package }}/SOURCE-DIFF.patch
             ${{ steps.paths.outputs.package }}/SOURCE-STATUS.txt
             build-source/ps4/configs/native.toml
