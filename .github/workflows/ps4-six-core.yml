@@ -1,4 +1,5 @@
 name: PS4 six-core metadata test
+run-name: PS4 six/seven-core fPKG A/B - ${{ github.run_id }}
 
 on:
   workflow_dispatch:
