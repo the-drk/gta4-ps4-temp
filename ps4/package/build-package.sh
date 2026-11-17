@@ -76,5 +76,27 @@ if grep -q '\[FAIL\]' "$package_dir/validate.log"; then
   exit 1
 fi
 ln -sf "$(basename "$pkg")" "$package_dir/out/GTA4.pkg"
-sha256sum "$eboot" "$pkg" > "$package_dir/SHA256SUMS"
+
+# PkgTool builds the fPKG from the GP4 (pkg_ps4_app, IV0000 content ID,
+# zero passcode). Keep the original .pkg name for compatibility and publish
+# an explicitly versioned .fpkg copy for unambiguous console-side testing.
+default_version="gta4-ps4-$(date -u +%Y%m%dT%H%M%SZ)-$(git -C "$repo" rev-parse --short=12 HEAD 2>/dev/null || printf unknown)"
+fpkg_version="${PS4_FPKG_VERSION:-$default_version}"
+[[ "$fpkg_version" =~ ^[A-Za-z0-9._-]+$ ]] || {
+  echo "Invalid PS4_FPKG_VERSION: $fpkg_version" >&2; exit 1;
+}
+fpkg="$package_dir/out/$fpkg_version.fpkg"
+cp -- "$pkg" "$fpkg"
+{
+  echo "fpkg_version=$fpkg_version"
+  echo "core_profile=${PS4_FPKG_CORE_PROFILE:-unspecified}"
+  echo "content_id=IV0000-LBTY00001_00-GTA4PS4000000000"
+  echo "package_source=$pkg"
+  echo "eboot_sha256=$(sha256sum "$eboot" | cut -d' ' -f1)"
+  echo "pkg_sha256=$(sha256sum "$pkg" | cut -d' ' -f1)"
+  echo "fpkg_sha256=$(sha256sum "$fpkg" | cut -d' ' -f1)"
+  echo "created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$package_dir/FPKG-VERSION.txt"
+sha256sum "$eboot" "$pkg" "$fpkg" > "$package_dir/SHA256SUMS"
+cat "$package_dir/FPKG-VERSION.txt"
 cat "$package_dir/SHA256SUMS"
