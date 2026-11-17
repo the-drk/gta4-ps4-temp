@@ -36,8 +36,10 @@ because the handoff records GPU hangs with it enabled.
 Host-side policy checks can be run on Windows with
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ps4/test-gameplay-policy.ps1`.
 They cover 1,040 interval/frame/device/threshold combinations, verify intervals
-1-4 keep their previous policy, and check the diagnostic source gate. These
-model checks do not compile or execute the C++ renderer.
+1-4 keep their previous policy, and check the diagnostic source gate. The
+portable equivalent `ps4/test-gameplay-policy.py` is also run by GitHub Actions
+on this diagnostics branch and on pull requests targeting `ps4-port`. These
+model/source checks do not compile or execute the C++ renderer.
 
 Build using `ps4/BUILD.md` and package using `AGENTS.md` and
 `ps4/package/README.md`. Keep the matching unstripped ELF, EBOOT hash, commit,
