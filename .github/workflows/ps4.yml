@@ -232,6 +232,18 @@ jobs:
           git -C build-source diff --binary > "$PS4_PACKAGE_DIR/SOURCE-DIFF.patch"
           git -C build-source status --short > "$PS4_PACKAGE_DIR/SOURCE-STATUS.txt"
           cat "$PS4_PACKAGE_DIR/BUILD-MANIFEST.txt"
+      - name: Publish versioned fPKG as a direct-download release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          fpkg="$(find "${{ steps.paths.outputs.package }}/out" -maxdepth 1 -type f -name '*.fpkg' -print -quit)"
+          [[ -s "$fpkg" ]] || { echo 'Versioned fPKG missing' >&2; exit 1; }
+          tag="ps4-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" "$fpkg" \
+            --title "GTA IV PS4 build ${GITHUB_RUN_NUMBER} (run ${GITHUB_RUN_ID})" \
+            --notes "Versioned fPKG direct download. Workflow commit ${GITHUB_SHA}. Build identity and SHA-256 are embedded in FPKG-VERSION.txt in the accompanying Actions artifact."
       - uses: actions/upload-artifact@v4
         with:
           name: gta4-ps4-${{ github.run_number }}-${{ github.run_attempt }}
