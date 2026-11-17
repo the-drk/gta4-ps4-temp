@@ -30,9 +30,11 @@ The build also uses the pinned host DXC under `~/codex_scratch/gta4-ps4-deps/dxc
 (`PS4_DXC_ROOT` to override). Temporary shader files are placed under the
 build directory, outside `/tmp`.
 
-GitHub Actions runs a NASM assembly check on pull requests. The full Orbis
-build and game-free package validation run on pushes to `ps4-port` using the
-`gta4-ps4-build` Kubernetes runner. The workflow checks out the pinned
+GitHub Actions runs the FFmpeg NASM assembly check and portable shadow/HUD
+policy checks on pushes to the diagnostics branch and on pull requests targeting
+`ps4-port`. The full Orbis build and game-free package validation run on pushes
+to `ps4-port`, or when explicitly requested with `build_package=true` through
+`workflow_dispatch`. The hosted workflow checks out the pinned
 Orbis-Win runner setup, attaches its `/orbis-cache` SDK and dependencies,
 downloads the pinned DXC archive, and builds the OpenOrbis stubs. Fork pull
 requests run only on GitHub-hosted runners.
