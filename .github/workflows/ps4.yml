@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ps4-port]
   push:
-    branches: [ps4-port]
+    branches: [ps4-port, fix/ps4-shadow-off-hud-diagnostics]
   workflow_dispatch:
     inputs:
       build_package:
@@ -60,10 +60,21 @@ jobs:
           sudo apt-get install --yes nasm
       - name: Assemble PS4 FFmpeg routines
         run: ps4/ci-check-ffmpeg-asm.sh
+  gameplay-policy:
+    name: PS4 shadow and HUD policy checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Check shadow-off policy and HUD diagnostic gate
+        run: python3 ps4/test-gameplay-policy.py
 
   orbis-build-package:
     name: Orbis build and package validation
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_package)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/ps4-port') || (github.event_name == 'workflow_dispatch' && inputs.build_package)
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
