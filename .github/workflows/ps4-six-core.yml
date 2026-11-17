@@ -176,7 +176,7 @@ jobs:
           gh release create "$tag" \
             "seven-core-package/out/gta4-ps4-seven-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.fpkg" \
             "six-core-package/out/gta4-ps4-six-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.fpkg" \
-            --title "GTA IV PS4 core A/B ${GITHUB_RUN_ID}" \\
+            --title "GTA IV PS4 core A/B ${GITHUB_RUN_ID}" \
             --target "$GITHUB_SHA" --prerelease \\
             --notes "Controlled core-allocation A/B. Both fPKGs use the exact same baseline EBOOT; only the PS4 SFO ATTRIBUTE seven-core bit differs. Run ${GITHUB_RUN_ID}, attempt ${GITHUB_RUN_ATTEMPT}, source ${GITHUB_SHA}."
       - uses: actions/upload-artifact@v4
