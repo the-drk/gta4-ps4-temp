@@ -78,18 +78,17 @@ if grep -q '\[FAIL\]' "$package_dir/validate.log"; then
 fi
 ln -sf "$(basename "$pkg")" "$package_dir/out/GTA4.pkg"
 
-# PkgTool builds the fPKG from the GP4 (pkg_ps4_app, IV0000 content ID,
-# zero passcode). Keep the original .pkg name for compatibility and publish
-# an explicitly versioned .fpkg copy for unambiguous console-side testing.
+# PkgTool produces the PS4-installable .pkg. Keep that extension for
+# both the versioned direct-download file and console compatibility.
 default_version="gta4-ps4-$(date -u +%Y%m%dT%H%M%SZ)-$(git -C "$repo" rev-parse --short=12 HEAD 2>/dev/null || printf unknown)"
-fpkg_version="${PS4_FPKG_VERSION:-$default_version}"
-[[ "$fpkg_version" =~ ^[A-Za-z0-9._-]+$ ]] || {
-  echo "Invalid PS4_FPKG_VERSION: $fpkg_version" >&2; exit 1;
+package_version="${PS4_PACKAGE_VERSION:-${PS4_FPKG_VERSION:-$default_version}}"
+[[ "$package_version" =~ ^[A-Za-z0-9._-]+$ ]] || {
+  echo "Invalid PS4_PACKAGE_VERSION: $package_version" >&2; exit 1;
 }
-fpkg="$package_dir/out/$fpkg_version.fpkg"
-cp -- "$pkg" "$fpkg"
+versioned_pkg="$package_dir/out/$package_version.pkg"
+cp -- "$pkg" "$versioned_pkg"
 {
-  echo "fpkg_version=$fpkg_version"
+  echo "package_version=$package_version"
   echo "core_profile=${PS4_FPKG_CORE_PROFILE:-unspecified}"
   echo "content_id=IV0000-LBTY00001_00-GTA4PS4000000000"
   echo "workflow_run_id=${GITHUB_RUN_ID:-local}"
@@ -100,9 +99,9 @@ cp -- "$pkg" "$fpkg"
   echo "package_source=$pkg"
   echo "eboot_sha256=$(sha256sum "$eboot" | cut -d' ' -f1)"
   echo "pkg_sha256=$(sha256sum "$pkg" | cut -d' ' -f1)"
-  echo "fpkg_sha256=$(sha256sum "$fpkg" | cut -d' ' -f1)"
+  echo "versioned_pkg_sha256=$(sha256sum "$versioned_pkg" | cut -d' ' -f1)"
   echo "created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-} > "$package_dir/FPKG-VERSION.txt"
-sha256sum "$eboot" "$pkg" "$fpkg" > "$package_dir/SHA256SUMS"
-cat "$package_dir/FPKG-VERSION.txt"
+} > "$package_dir/PACKAGE-VERSION.txt"
+sha256sum "$eboot" "$pkg" "$versioned_pkg" > "$package_dir/SHA256SUMS"
+cat "$package_dir/PACKAGE-VERSION.txt"
 cat "$package_dir/SHA256SUMS"
