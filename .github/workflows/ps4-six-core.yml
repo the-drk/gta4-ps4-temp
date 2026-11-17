@@ -1,5 +1,5 @@
 name: PS4 six-core metadata test
-run-name: PS4 six/seven-core fPKG A/B - ${{ github.run_id }}
+run-name: PS4 two-package console test - ${{ github.run_id }}
 
 on:
   workflow_dispatch:
@@ -127,7 +127,7 @@ jobs:
               'Only seven-core ATTRIBUTE bit cleared for six-core package.\n'
               'Both packages reuse the exact same baseline EBOOT.\n')
           PY
-      - name: Build and validate seven-core control fPKG
+      - name: Build and validate seven-core control PKG
         env:
           PS4_BUILD_DIR: ${{ github.workspace }}/reused-build
           PS4_PACKAGE_DIR: ${{ github.workspace }}/seven-core-package
@@ -135,10 +135,10 @@ jobs:
           PS4_STUBS_DIR: ${{ github.workspace }}/gta4-openorbis-stubs
           PS4_EXPECTED_LIBC_SHA256: 5680c77d0215ead1c51deb00d76c5347f306e04c81b8b1119c9fd84580ebcf94
           PS4_EXPECTED_FIOS2_SHA256: 0ab6fa2479d1c15ebdc6b7621413bfc9f89b58c97da7563bc804cef3a495ea4a
-          PS4_FPKG_VERSION: gta4-ps4-seven-core-${{ github.run_id }}-${{ github.run_attempt }}
+          PS4_PACKAGE_VERSION: gta4-ps4-seven-core-${{ github.run_id }}-${{ github.run_attempt }}
           PS4_FPKG_CORE_PROFILE: seven-core-control
         run: ps4/package/build-package.sh
-      - name: Build and validate six-core test fPKG
+      - name: Build and validate six-core test PKG
         env:
           PS4_BUILD_DIR: ${{ github.workspace }}/reused-build
           PS4_PACKAGE_DIR: ${{ github.workspace }}/six-core-package
@@ -146,7 +146,7 @@ jobs:
           PS4_STUBS_DIR: ${{ github.workspace }}/gta4-openorbis-stubs
           PS4_EXPECTED_LIBC_SHA256: 5680c77d0215ead1c51deb00d76c5347f306e04c81b8b1119c9fd84580ebcf94
           PS4_EXPECTED_FIOS2_SHA256: 0ab6fa2479d1c15ebdc6b7621413bfc9f89b58c97da7563bc804cef3a495ea4a
-          PS4_FPKG_VERSION: gta4-ps4-six-core-${{ github.run_id }}-${{ github.run_attempt }}
+          PS4_PACKAGE_VERSION: gta4-ps4-six-core-${{ github.run_id }}-${{ github.run_attempt }}
           PS4_FPKG_CORE_PROFILE: six-core-test
         run: ps4/package/build-package.sh
       - name: Record paired package provenance
@@ -163,30 +163,81 @@ jobs:
               echo "core_profile=${profile}"
               echo "eboot_sha256=$(sha256sum reused-build/glue/gta4-recomp/eboot.bin | cut -d' ' -f1)"
               echo "param_sfo_sha256=$(sha256sum "${profile}.param.sfo" | cut -d' ' -f1)"
-              cat "${dir}/FPKG-VERSION.txt"
+              cat "${dir}/PACKAGE-VERSION.txt"
             } > "${dir}/BUILD-MANIFEST.txt"
           done
-      - name: Publish both fPKGs as direct-download release assets
+      - name: Publish one seven-core PKG release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          tag="ps4-core-ab-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" \
-            "seven-core-package/out/gta4-ps4-seven-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.fpkg" \
-            "six-core-package/out/gta4-ps4-six-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.fpkg" \
-            --title "GTA IV PS4 core A/B ${GITHUB_RUN_ID}" \
+          pkg="seven-core-package/out/gta4-ps4-seven-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.pkg"
+          [[ -s "$pkg" ]] || { echo "Seven-core PKG missing: $pkg" >&2; exit 1; }
+          tag="ps4-seven-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" "$pkg" \
+            --title "GTA IV PS4 — Seven-core test" \
             --target "$GITHUB_SHA" --prerelease \
-            --notes "Controlled core-allocation A/B. Both fPKGs use the exact same baseline EBOOT; only the PS4 SFO ATTRIBUTE seven-core bit differs. Run ${GITHUB_RUN_ID}, attempt ${GITHUB_RUN_ATTEMPT}, source ${GITHUB_SHA}."
+            --notes "## What this version tests
+
+          This is the **standard seven-core version**. It is the control build for the comparison.
+
+          Install this package and play the same area, route and activity that you use for the six-core test. Note the smoothness, slowdowns and any audio stutter.
+
+          **What to expect:** this is the reference version, not a promised performance upgrade. The paired six-core test changes one console setting while keeping the game build the same.
+
+          **Version:** ${pkg##*/}
+
+          **Test run:** ${GITHUB_RUN_ID}"
+      - name: Publish one six-core PKG release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg="six-core-package/out/gta4-ps4-six-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.pkg"
+          [[ -s "$pkg" ]] || { echo "Six-core PKG missing: $pkg" >&2; exit 1; }
+          tag="ps4-six-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" "$pkg" \
+            --title "GTA IV PS4 — Six-core test" \
+            --target "$GITHUB_SHA" --prerelease \
+            --notes "## What this version tests
+
+          This is the **six-core comparison version**. It uses the same game build as the seven-core version, with a different console workload setting.
+
+          Install this package and repeat the exact same area, route and activity used for the seven-core test. Compare smoothness, slowdowns and audio stutter. If you notice no consistent difference, that is a useful result too.
+
+          **What to expect:** this is an experiment, not a guaranteed speed boost.
+
+          **Version:** ${pkg##*/}
+
+          **Test run:** ${GITHUB_RUN_ID}"
+      - name: Remove earlier duplicate A/B releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_seven="ps4-seven-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          current_six="ps4-six-core-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          while IFS= read -r old_tag; do
+            [[ -n "$old_tag" ]] || continue
+            case "$old_tag" in
+              ps4-core-ab-*|ps4-seven-core-*|ps4-six-core-*)
+                [[ "$old_tag" == "$current_seven" || "$old_tag" == "$current_six" ]] && continue
+                echo "Removing superseded release: $old_tag"
+                gh release delete "$old_tag" --yes --cleanup-tag
+                ;;
+            esac
+          done < <(gh release list --limit 100 --json tagName --jq '.[].tagName')
       - uses: actions/upload-artifact@v4
         with:
           name: gta4-ps4-core-ab-manifests-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            seven-core-package/FPKG-VERSION.txt
+            seven-core-package/PACKAGE-VERSION.txt
             seven-core-package/SHA256SUMS
             seven-core-package/BUILD-MANIFEST.txt
-            six-core-package/FPKG-VERSION.txt
+            six-core-package/PACKAGE-VERSION.txt
             six-core-package/SHA256SUMS
             six-core-package/BUILD-MANIFEST.txt
             METADATA-CHANGE.txt
