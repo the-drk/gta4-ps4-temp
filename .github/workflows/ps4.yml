@@ -202,7 +202,7 @@ jobs:
           PS4_STUBS_DIR: ${{ github.workspace }}/gta4-openorbis-stubs
           PS4_EXPECTED_LIBC_SHA256: 5680c77d0215ead1c51deb00d76c5347f306e04c81b8b1119c9fd84580ebcf94
           PS4_EXPECTED_FIOS2_SHA256: 0ab6fa2479d1c15ebdc6b7621413bfc9f89b58c97da7563bc804cef3a495ea4a
-          PS4_FPKG_VERSION: gta4-ps4-${{ github.run_number }}-${{ github.run_attempt }}-${{ github.sha }}
+          PS4_PACKAGE_VERSION: gta4-ps4-${{ github.run_number }}-${{ github.run_attempt }}-${{ github.sha }}
           PS4_FPKG_CORE_PROFILE: seven-core-default
         run: build-source/ps4/package/build-package.sh
       - name: Record build provenance
@@ -232,19 +232,30 @@ jobs:
           git -C build-source diff --binary > "$PS4_PACKAGE_DIR/SOURCE-DIFF.patch"
           git -C build-source status --short > "$PS4_PACKAGE_DIR/SOURCE-STATUS.txt"
           cat "$PS4_PACKAGE_DIR/BUILD-MANIFEST.txt"
-      - name: Publish versioned fPKG as a direct-download release asset
+      - name: Publish versioned PS4 PKG as a direct download
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          fpkg="$(find "${{ steps.paths.outputs.package }}/out" -maxdepth 1 -type f -name '*.fpkg' -print -quit)"
-          [[ -s "$fpkg" ]] || { echo 'Versioned fPKG missing' >&2; exit 1; }
+          pkg="${{ steps.paths.outputs.package }}/out/gta4-ps4-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA}.pkg"
+          [[ -s "$pkg" ]] || { echo "Versioned PS4 PKG missing: $pkg" >&2; exit 1; }
           tag="ps4-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" "$fpkg" \
-            --title "GTA IV PS4 build ${GITHUB_RUN_NUMBER} (run ${GITHUB_RUN_ID})" \
+          gh release create "$tag" "$pkg" \
+            --title "GTA IV PS4 — Standard build" \
             --target "$GITHUB_SHA" --prerelease \
-            --notes "Versioned fPKG direct download. Workflow commit ${GITHUB_SHA}. Build identity and SHA-256 are embedded in FPKG-VERSION.txt in the accompanying Actions artifact."
+            --notes "## What this version is
+
+          This is the standard GTA IV PS4 test package built from the current project version.
+
+          Install it on your PS4 to try the latest available build. If you are comparing performance, use the same game area and activity each time so the results are meaningful.
+
+          **Version:** ${pkg##*/}
+
+          **Build run:** ${GITHUB_RUN_ID}
+
+          This is an experimental project build, so performance and compatibility may vary."
+
       - uses: actions/upload-artifact@v4
         with:
           name: gta4-ps4-${{ github.run_number }}-${{ github.run_attempt }}
@@ -254,7 +265,7 @@ jobs:
             ${{ steps.paths.outputs.package }}/SHA256SUMS
             ${{ steps.paths.outputs.package }}/validate.log
             ${{ steps.paths.outputs.package }}/BUILD-MANIFEST.txt
-            ${{ steps.paths.outputs.package }}/FPKG-VERSION.txt
+            ${{ steps.paths.outputs.package }}/PACKAGE-VERSION.txt
             ${{ steps.paths.outputs.package }}/SOURCE-DIFF.patch
             ${{ steps.paths.outputs.package }}/SOURCE-STATUS.txt
             build-source/ps4/configs/native.toml
