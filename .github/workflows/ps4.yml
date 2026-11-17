@@ -248,8 +248,6 @@ jobs:
         with:
           name: gta4-ps4-${{ github.run_number }}-${{ github.run_attempt }}
           path: |
-            ${{ steps.paths.outputs.package }}/out/GTA4.pkg
-            ${{ steps.paths.outputs.package }}/out/*.fpkg
             ${{ steps.paths.outputs.build }}/glue/gta4-recomp/eboot.bin
             ${{ steps.paths.outputs.package }}/gta4.elf
             ${{ steps.paths.outputs.package }}/SHA256SUMS
