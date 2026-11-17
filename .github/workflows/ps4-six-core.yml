@@ -7,7 +7,7 @@ on:
     paths: [.github/workflows/ps4-six-core.yml]
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
