@@ -242,7 +242,8 @@ jobs:
           [[ -s "$fpkg" ]] || { echo 'Versioned fPKG missing' >&2; exit 1; }
           tag="ps4-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           gh release create "$tag" "$fpkg" \
-            --title "GTA IV PS4 build ${GITHUB_RUN_NUMBER} (run ${GITHUB_RUN_ID})" \
+            --title "GTA IV PS4 build ${GITHUB_RUN_NUMBER} (run ${GITHUB_RUN_ID})" \\
+            --target "$GITHUB_SHA" --prerelease \\
             --notes "Versioned fPKG direct download. Workflow commit ${GITHUB_SHA}. Build identity and SHA-256 are embedded in FPKG-VERSION.txt in the accompanying Actions artifact."
       - uses: actions/upload-artifact@v4
         with:
