@@ -34,10 +34,10 @@ GitHub Actions runs the FFmpeg NASM assembly check and portable shadow/HUD
 policy checks on pushes to the diagnostics branch and on pull requests targeting
 `ps4-port`. The full Orbis build and game-free package validation run on pushes
 to `ps4-port`, or when explicitly requested with `build_package=true` through
-`workflow_dispatch`. The hosted workflow checks out the pinned
-Orbis-Win runner setup, attaches its `/orbis-cache` SDK and dependencies,
-downloads the pinned DXC archive, and builds the OpenOrbis stubs. Fork pull
-requests run only on GitHub-hosted runners.
+`workflow_dispatch`. The hosted workflow downloads and verifies the public paired Orbis SDK,
+checks out the pinned `orbis-win` sources to build OpenOrbis module stubs,
+downloads the pinned DXC archive, and builds on GitHub-hosted Ubuntu. Fork
+pull requests run only on GitHub-hosted runners.
 
 To make a package, see [package/README.md](package/README.md). The installed
 Xbox 360 game data lives separately at `/data/LibertyRecomp/game` on the
