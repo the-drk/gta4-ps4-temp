@@ -30,12 +30,20 @@ def should_drop(interval: int, frame: int, has_device: bool,
 
 
 def extract_function(source: str, signature: str) -> str:
-    start = source.find(signature)
-    if start < 0:
-        raise AssertionError(f"Missing function signature: {signature}")
-    opening = source.find("{", start)
-    if opening < 0:
-        raise AssertionError(f"Missing function body: {signature}")
+    """Extract a definition, skipping any earlier forward declaration."""
+    search_from = 0
+    while True:
+        start = source.find(signature, search_from)
+        if start < 0:
+            raise AssertionError(f"Missing function definition: {signature}")
+        opening = start + len(signature)
+        while opening < len(source) and source[opening].isspace():
+            opening += 1
+        if opening < len(source) and source[opening] == "{":
+            break
+        # A declaration ends in ';'. Continue to the later out-of-line definition.
+        search_from = start + len(signature)
+
     depth = 0
     for index in range(opening, len(source)):
         if source[index] == "{":
