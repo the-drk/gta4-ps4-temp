@@ -19,6 +19,20 @@ The default build directory is
 existing stage, so choose a new `PS4_PACKAGE_DIR` for each package run. It
 writes `out/GTA4.pkg` as a link to the validated content-ID PKG.
 
+The same validated PkgTool output is also copied to a uniquely named
+`out/<version>.fpkg` file. The extension is a distribution label; the bytes
+are identical to the validated `.pkg` output, and the package is built as a
+PS4 application package from the GP4 (it is not re-signed or transformed by the
+copy). The script writes `FPKG-VERSION.txt` and `SHA256SUMS` with the version,
+core profile, workflow run/attempt, source commit, SFO/EBOOT/package hashes,
+and UTC build time. GitHub Actions publishes the versioned fPKG as an
+individual Release asset for direct download; the small Actions artifact keeps
+its manifests and diagnostics without wrapping the 140+ MB package in a ZIP.
+For the six/seven-core A/B, both packages reuse the same baseline EBOOT and
+only differ in the SFO `ATTRIBUTE` seven-core bit. This isolates the metadata
+setting; it is not a rebuilt six-core executable and must be validated on the
+console before drawing performance conclusions.
+
 External inputs that Git does not contain:
 
 - `PS4_SDK_BUNDLE` defaults to `~/ps4-gladius/sdk/orbis-sdk-v1` and provides
